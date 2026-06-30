@@ -6,6 +6,7 @@ pushed to `dev` (never direct to `main`).
 | # | Feature | Files | Status |
 |---|---------|-------|--------|
 | 11 | Gateway-agnostic payment hub (JazzCash + Easypaisa + Stripe), dry-run safe. Unlocks real money for top-ups/checkout/marketplace. | `src/services/payments/*`, `docs/PAYMENTS.md` | on `dev` |
+| 13 | Sellable AI credit packs metered on local Ollama (near-pure margin). Buy via payment hub, spend per AI action, full ledger + RLS. | `src/lib/ai/aiCredits.ts`, `supabase/migrations/20260630_ai_credits.sql` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
