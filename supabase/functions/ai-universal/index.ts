@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { routeChatCompletion } from "../_shared/llmRouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,21 +96,15 @@ serve(async (req) => {
     }
 
     const { domain, action, context, messages, stream } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
-
     const systemPrompt = getSystemPrompt(domain || "general", action || "chat");
 
     // Build messages array
-    const aiMessages = [
+    const aiMessages: { role: string; content: string }[] = [
       { role: "system", content: systemPrompt },
     ];
-
-    // If messages are provided (chat mode), append them
     if (messages && Array.isArray(messages)) {
       aiMessages.push(...messages);
     } else {
-      // Single request mode: build a user message from context
       aiMessages.push({
         role: "user",
         content: typeof context === "string" ? context : JSON.stringify(context),
@@ -118,54 +113,38 @@ serve(async (req) => {
 
     const shouldStream = stream === true;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: aiMessages,
-        stream: shouldStream,
-      }),
-    });
+    // Route through local Ollama first (cost ~0), Lovable as fallback (#49).
+    const { response, provider } = await routeChatCompletion({ messages: aiMessages, stream: shouldStream });
 
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
         return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits in Settings." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI provider error:", provider, response.status, errorText);
       return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (shouldStream) {
       return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-LLM-Provider": provider },
       });
     }
 
-    // Non-streaming: parse and return
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
 
-    // Try to parse as JSON if the prompt requested it
     let result;
     try {
-      // Strip markdown code fences if present
       const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       result = JSON.parse(cleaned);
     } catch {
@@ -173,7 +152,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-LLM-Provider": provider },
     });
   } catch (e) {
     console.error("ai-universal error:", e);
