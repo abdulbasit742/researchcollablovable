@@ -21,35 +21,31 @@ pushed to `dev` (never direct to `main`).
 | 51 | SERVER-side AI credit enforcement in ai-universal. | `supabase/functions/_shared/aiCreditGuard.ts`, `supabase/functions/ai-universal/index.ts` | on `dev` |
 | 53 | Payout / cash-out pipeline: request -> approve -> disburse (dry-run safe). | `src/lib/revenue/payoutService.ts`, `supabase/migrations/20260630_payouts.sql` | on `dev` |
 | 55 | Server-side payout disbursement edge fn (live cash-out), idempotent. | `supabase/functions/payouts-disburse/index.ts` | on `dev` |
-| 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution. | `src/lib/referral/referralRewards.ts` | on `dev` |
-| 62 | Referral hooks: capture ?ref=, fulfil on signup, pay cash on first purchase. | `src/lib/referral/referralHooks.ts` | on `dev` |
+| 61 | Referral reward fulfillment. | `src/lib/referral/referralRewards.ts` | on `dev` |
+| 62 | Referral hooks (capture/signup/first-purchase). | `src/lib/referral/referralHooks.ts` | on `dev` |
 | 63 | Wired captureReferralFromUrl() into main.tsx bootstrap. | `src/main.tsx` | on `dev` |
 | 70 | Wired onSignupComplete() into AuthPage post-auth redirect. | `src/pages/AuthPage.tsx` | on `dev` |
-| 72 | Wired first-purchase referral payout into the settlement webhook (server-side). | `supabase/functions/payments-settle/index.ts` | on `dev` |
-| 73 | Shared credited ai-universal client: handles server 402 -> InsufficientCreditsError + top-up toast; streaming + non-streaming. The credited path all AI hooks should call. Closes the LAST pending-wiring item. | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
+| 72 | Wired first-purchase referral payout into the settlement webhook. | `supabase/functions/payments-settle/index.ts` | on `dev` |
+| 73 | Shared credited ai-universal client (handles 402 + top-up). | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
+| 74 | Seed subscription_tiers (idempotent) so plan checkout resolves tier_id; without it paid subs got tier_id=null and subscriptionGuard treated them as Free. Seeds both gating names and revenue/plans names. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
 - Imports via `@/` alias. Dry-run / safe-by-default for anything touching money (in AND out).
 - Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
-- AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73) for the 402 top-up UX.
+- AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
 - All work lands on `dev`; merge to `main` after review.
 
-## Wiring — ALL CLOSED
-- [x] captureReferralFromUrl() in app bootstrap (main.tsx) — #63.
-- [x] onSignupComplete(userId) on first authenticated landing (AuthPage) — #70.
-- [x] First-purchase referral payout in settlement webhook (server-side) — #72.
-- [x] Credited AI path: callAIUniversal/streamAIUniversal handle 402 + top-up — #73.
-  (Remaining: migrate individual domain hooks to import this client — mechanical, do during merge.)
+## Wiring — ALL CLOSED (#63/#70/#72/#73). Tier seed (#74) makes paid plans resolve.
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51/#73)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73)
 3. Marketplace commission (#34)  4. Visibility boosts (#47)
-Growth: referral rewards (#61) fired by hooks (#62), captured (#63), converted on signup (#70), first-purchase cash via settlement (#72).
+Growth: referral rewards (#61/#62/#63/#70/#72).
 
 ## STATUS: feature-complete revenue + growth stack on `dev`. Ready for review + merge to main.
