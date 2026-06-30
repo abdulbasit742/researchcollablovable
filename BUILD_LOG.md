@@ -27,7 +27,11 @@ pushed to `dev` (never direct to `main`).
 | 70 | Wired onSignupComplete() into AuthPage post-auth redirect. | `src/pages/AuthPage.tsx` | on `dev` |
 | 72 | Wired first-purchase referral payout into the settlement webhook. | `supabase/functions/payments-settle/index.ts` | on `dev` |
 | 73 | Shared credited ai-universal client (handles 402 + top-up). | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
-| 74 | Seed subscription_tiers (idempotent) so plan checkout resolves tier_id; without it paid subs got tier_id=null and subscriptionGuard treated them as Free. Seeds both gating names and revenue/plans names. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
+| 74 | Seed subscription_tiers so plan checkout resolves tier_id. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
+| 76 | Financial tests for commission math (calcCommission/COMMISSION_RATE): split correctness, per-tier rates, rounding, fee+net===gross invariant. Makes CI's MUST-pass financial gate actually cover the new revenue logic. | `tests/financial/revenue.test.ts` | on `dev` |
+
+## PR
+- `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -36,8 +40,7 @@ pushed to `dev` (never direct to `main`).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
 - All work lands on `dev`; merge to `main` after review.
-
-## Wiring — ALL CLOSED (#63/#70/#72/#73). Tier seed (#74) makes paid plans resolve.
+- CI runs tests/financial/ as a MUST-pass gate (#76 adds commission coverage).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
@@ -45,7 +48,7 @@ pushed to `dev` (never direct to `main`).
 
 ## Revenue streams live
 1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73)
-3. Marketplace commission (#34)  4. Visibility boosts (#47)
+3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
-## STATUS: feature-complete revenue + growth stack on `dev`. Ready for review + merge to main.
+## STATUS: feature-complete revenue + growth stack on `dev`. PR #1 open for review + merge.
