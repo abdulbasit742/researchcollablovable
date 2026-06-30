@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getPlatformEarnings, type EarningsByStream } from "@/lib/revenue/platformEarnings";
+import { getCommissionPercent, setCommissionPercent } from "@/lib/admin/commissionSettings";
 
 export interface Transaction {
   id: string;
@@ -10,7 +12,6 @@ export interface Transaction {
   status: string;
   currency: string;
   created_at: string;
-  // Joined data
   user_name?: string;
   tool_name?: string;
 }
@@ -25,7 +26,6 @@ export interface Dispute {
   resolution: string | null;
   created_at: string;
   resolved_at: string | null;
-  // Joined data
   milestone_title?: string;
   milestone_amount?: number;
   initiator_name?: string;
@@ -35,16 +35,14 @@ export function useAdminFinance() {
   const { toast } = useToast();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [walletStats, setWalletStats] = useState({
-    totalEscrow: 0,
-    totalAvailable: 0,
-    totalPending: 0,
-  });
+  const [walletStats, setWalletStats] = useState({ totalEscrow: 0, totalAvailable: 0, totalPending: 0 });
+  const [platform, setPlatform] = useState<{
+    total: number; mrr: number; earnings30d: number; byStream: EarningsByStream;
+  }>({ total: 0, mrr: 0, earnings30d: 0, byStream: { subscriptions: 0, ai_credits: 0, marketplace_commission: 0, other: 0 } });
+  const [commissionPercent, setCommissionPercentState] = useState(10);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchFinanceData();
-  }, []);
+  useEffect(() => { fetchFinanceData(); }, []);
 
   const fetchFinanceData = async () => {
     setLoading(true);
@@ -53,9 +51,37 @@ export function useAdminFinance() {
         fetchTransactions(),
         fetchDisputes(),
         fetchWalletStats(),
+        fetchPlatformEarnings(),
+        fetchCommission(),
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPlatformEarnings = async () => {
+    try {
+      const e = await getPlatformEarnings();
+      setPlatform({ total: e.total, mrr: e.mrr, earnings30d: e.earnings30d, byStream: e.byStream });
+    } catch (err) {
+      console.error("Error fetching platform earnings:", err);
+    }
+  };
+
+  const fetchCommission = async () => {
+    try { setCommissionPercentState(await getCommissionPercent()); }
+    catch (err) { console.error("Error fetching commission rate:", err); }
+  };
+
+  const saveCommissionPercent = async (percent: number) => {
+    try {
+      await setCommissionPercent(percent);
+      setCommissionPercentState(percent);
+      toast({ title: "Commission Updated", description: `Commission rate set to ${percent}%` });
+      return { success: true };
+    } catch (err: any) {
+      toast({ title: "Invalid Commission", description: err.message, variant: "destructive" });
+      return { success: false };
     }
   };
 
@@ -66,28 +92,22 @@ export function useAdminFinance() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100);
-
       if (error) throw error;
 
-      // Fetch user profiles and tools
-      const userIds = [...new Set(data?.map(t => t.user_id) || [])];
-      const toolIds = [...new Set(data?.map(t => t.tool_id) || [])];
-
+      const userIds = [...new Set(data?.map((t) => t.user_id) || [])];
+      const toolIds = [...new Set(data?.map((t) => t.tool_id) || [])];
       const [profilesRes, toolsRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name").in("id", userIds),
-        supabase.from("tools").select("id, name").in("id", toolIds)
+        supabase.from("tools").select("id, name").in("id", toolIds),
       ]);
+      const profileMap = new Map(profilesRes.data?.map((p) => [p.id, p.full_name]) || []);
+      const toolMap = new Map(toolsRes.data?.map((t) => [t.id, t.name]) || []);
 
-      const profileMap = new Map(profilesRes.data?.map(p => [p.id, p.full_name]) || []);
-      const toolMap = new Map(toolsRes.data?.map(t => [t.id, t.name]) || []);
-
-      const enriched = (data || []).map(txn => ({
+      setTransactions((data || []).map((txn) => ({
         ...txn,
         user_name: profileMap.get(txn.user_id) || "Unknown",
         tool_name: toolMap.get(txn.tool_id) || "Unknown Tool",
-      }));
-
-      setTransactions(enriched);
+      })));
     } catch (err) {
       console.error("Error fetching transactions:", err);
     }
@@ -99,34 +119,22 @@ export function useAdminFinance() {
         .from("disputes")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (error) throw error;
 
-      // Fetch milestone and user details
       const disputesWithDetails = await Promise.all(
         (data || []).map(async (dispute) => {
           const [milestoneRes, profileRes] = await Promise.all([
-            supabase
-              .from("milestones")
-              .select("title, amount")
-              .eq("id", dispute.milestone_id)
-              .maybeSingle(),
-            supabase
-              .from("profiles")
-              .select("full_name")
-              .eq("id", dispute.initiated_by)
-              .maybeSingle()
+            supabase.from("milestones").select("title, amount").eq("id", dispute.milestone_id).maybeSingle(),
+            supabase.from("profiles").select("full_name").eq("id", dispute.initiated_by).maybeSingle(),
           ]);
-
           return {
             ...dispute,
             milestone_title: milestoneRes.data?.title || "Unknown Milestone",
             milestone_amount: milestoneRes.data?.amount || 0,
             initiator_name: profileRes.data?.full_name || "Unknown",
           };
-        })
+        }),
       );
-
       setDisputes(disputesWithDetails);
     } catch (err) {
       console.error("Error fetching disputes:", err);
@@ -138,40 +146,39 @@ export function useAdminFinance() {
       const { data, error } = await supabase
         .from("wallets")
         .select("available_balance, escrow_balance, pending_balance");
-
       if (error) throw error;
-
-      const stats = (data || []).reduce(
-        (acc, wallet) => ({
-          totalEscrow: acc.totalEscrow + Number(wallet.escrow_balance || 0),
-          totalAvailable: acc.totalAvailable + Number(wallet.available_balance || 0),
-          totalPending: acc.totalPending + Number(wallet.pending_balance || 0),
+      setWalletStats((data || []).reduce(
+        (acc, w) => ({
+          totalEscrow: acc.totalEscrow + Number(w.escrow_balance || 0),
+          totalAvailable: acc.totalAvailable + Number(w.available_balance || 0),
+          totalPending: acc.totalPending + Number(w.pending_balance || 0),
         }),
-        { totalEscrow: 0, totalAvailable: 0, totalPending: 0 }
-      );
-
-      setWalletStats(stats);
+        { totalEscrow: 0, totalAvailable: 0, totalPending: 0 },
+      ));
     } catch (err) {
       console.error("Error fetching wallet stats:", err);
     }
   };
 
   const getStats = () => {
-    const completedTransactions = transactions.filter(t => t.status === "completed" || t.status === "delivered");
-    const totalRevenue = completedTransactions.reduce((sum, t) => sum + Number(t.amount), 0);
-    const commissionRate = 0.1; // 10%
-    const totalCommission = totalRevenue * commissionRate;
-    const totalPayout = totalRevenue - totalCommission;
-    const openDisputes = disputes.filter(d => d.status === "open" || d.status === "under_review").length;
+    const completed = transactions.filter((t) => t.status === "completed" || t.status === "delivered");
+    const toolRevenue = completed.reduce((sum, t) => sum + Number(t.amount), 0);
+    const rate = commissionPercent / 100;
+    const toolCommission = toolRevenue * rate;
 
-    // Monthly revenue
+    // Total platform revenue = marketplace tool commission + all other streams (#36).
+    const totalRevenue = platform.total + toolRevenue;
+    const totalCommission = platform.byStream.marketplace_commission + toolCommission;
+    const totalPayout = toolRevenue - toolCommission;
+    const openDisputes = disputes.filter((d) => d.status === "open" || d.status === "under_review").length;
+
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-
-    const monthlyRevenue = completedTransactions
-      .filter(t => new Date(t.created_at) >= startOfMonth)
+    const monthlyToolRevenue = completed
+      .filter((t) => new Date(t.created_at) >= startOfMonth)
       .reduce((sum, t) => sum + Number(t.amount), 0);
+    const monthlyRevenue = monthlyToolRevenue + platform.earnings30d;
 
     return {
       totalRevenue,
@@ -179,32 +186,26 @@ export function useAdminFinance() {
       totalPayout,
       monthlyRevenue,
       openDisputes,
+      mrr: platform.mrr,
+      revenueByStream: {
+        ...platform.byStream,
+        marketplace_tool_orders: toolRevenue,
+      },
       ...walletStats,
     };
   };
 
-  const resolveDispute = async (
-    disputeId: string,
-    resolution: string,
-    action: "release" | "refund"
-  ) => {
+  const resolveDispute = async (disputeId: string, resolution: string, action: "release" | "refund") => {
     try {
       const { error } = await supabase
         .from("disputes")
-        .update({
-          status: "resolved",
-          resolution,
-          resolved_at: new Date().toISOString(),
-        })
+        .update({ status: "resolved", resolution, resolved_at: new Date().toISOString() })
         .eq("id", disputeId);
-
       if (error) throw error;
-
       toast({
         title: "Dispute Resolved",
         description: `Funds have been ${action === "release" ? "released to seller" : "refunded to buyer"}`,
       });
-
       await fetchDisputes();
       return { success: true };
     } catch (err: any) {
@@ -218,6 +219,8 @@ export function useAdminFinance() {
     disputes,
     loading,
     stats: getStats(),
+    commissionPercent,
+    saveCommissionPercent,
     refetch: fetchFinanceData,
     resolveDispute,
   };
