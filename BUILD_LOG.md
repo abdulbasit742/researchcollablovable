@@ -30,8 +30,9 @@ pushed to `dev` (never direct to `main`).
 | 74 | Seed subscription_tiers. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
 | 76 | Financial tests for commission math. | `tests/financial/revenue.test.ts` | on `dev` |
 | 79 | AI Prompt Library on credited client. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
-| 82 | Project-scope AI assist (credited deals.analyze-scope + heuristic fallback). | `src/lib/ai/scopeAssist.ts` | on `dev` |
-| 83 | personalAssistant chat + recommendations routed through credited ai-universal (was the standalone pai-assistant fn: no credit enforcement, no Ollama). Public API unchanged. 3rd credited-AI migration. | `src/lib/ai/personalAssistant.ts` | on `dev` |
+| 82 | Project-scope AI assist helper (credited deals.analyze-scope + heuristic fallback). | `src/lib/ai/scopeAssist.ts` | on `dev` |
+| 83 | personalAssistant chat + recs routed through credited ai-universal. | `src/lib/ai/personalAssistant.ts` | on `dev` |
+| 84 | AIProjectScopePage.generateResults() now awaits analyzeScopeWithAI() and blends real AI complexity/effort/risk into the estimate, falling back to the local heuristic. Closes #82's page wiring; the fake setTimeout estimate is now genuinely credited AI. | `src/pages/AIProjectScopePage.tsx` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -46,18 +47,16 @@ pushed to `dev` (never direct to `main`).
 - CI runs tests/financial/ as a MUST-pass gate.
 
 ## Credited-AI migration (mechanical, ongoing)
-Move ad-hoc AI callers onto callAIUniversal/streamAIUniversal for credit
-enforcement + 402 top-up UX. Done: AIPromptLibraryPage (#79), project-scope assist
-(#82), personalAssistant chat+recs (#83 -> covers everything using the
-personalAssistant API + the #44 wrapper). Page wiring for #82 (blend in
-generateResults) still mechanical. Remaining direct callers: misc domain hooks.
+Done: AIPromptLibraryPage (#79), scope assist helper (#82) + page wiring (#84),
+personalAssistant chat+recs (#83 -> covers the personalAssistant API + #44 wrapper).
+Remaining: misc direct domain AI callers (audit during merge).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
