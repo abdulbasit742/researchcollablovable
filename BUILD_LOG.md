@@ -21,7 +21,8 @@ pushed to `dev` (never direct to `main`).
 | 51 | SERVER-side AI credit enforcement in ai-universal. | `supabase/functions/_shared/aiCreditGuard.ts`, `supabase/functions/ai-universal/index.ts` | on `dev` |
 | 53 | Payout / cash-out pipeline: request -> approve -> disburse (dry-run safe). | `src/lib/revenue/payoutService.ts`, `supabase/migrations/20260630_payouts.sql` | on `dev` |
 | 55 | Server-side payout disbursement edge fn (live cash-out), idempotent. | `supabase/functions/payouts-disburse/index.ts` | on `dev` |
-| 61 | Referral reward fulfillment: pays referrer credits + referred welcome bonus on conversion, cash on first purchase / institution referral. Idempotent. Closes the viral loop (vrl_rewards was never granted before). | `src/lib/referral/referralRewards.ts` | on `dev` |
+| 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution referral. Idempotent. | `src/lib/referral/referralRewards.ts` | on `dev` |
+| 62 | Referral hooks: capture ?ref= on landing, fulfil on signup, pay cash on first purchase. Wires #61 into real events (nothing called it before). | `src/lib/referral/referralHooks.ts` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -31,6 +32,12 @@ pushed to `dev` (never direct to `main`).
 - AI credits enforced SERVER-side in ai-universal (client checks are UX only).
 - All work lands on `dev`; merge to `main` after review.
 
+## Wiring still TODO (call these from existing flows during merge review)
+- `captureReferralFromUrl()` in app bootstrap (e.g. App.tsx / main.tsx).
+- `onSignupComplete(userId)` right after AuthPage signup success.
+- `onFirstPurchase(userId)` after the first settled payment (settlement webhook / billing success).
+- `creditedStreamChat` / ai-universal already enforce credits; ensure UI calls the credited path.
+
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
@@ -38,4 +45,4 @@ pushed to `dev` (never direct to `main`).
 ## Revenue streams live
 1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51)
 3. Marketplace commission (#34)  4. Visibility boosts (#47)
-Growth: referral rewards (#61) pay in credits/cash. All revenue rolls up into platform earnings (#36) + admin finance (#42).
+Growth: referral rewards (#61) fired by hooks (#62). All revenue rolls up into platform earnings (#36) + admin finance (#42).
