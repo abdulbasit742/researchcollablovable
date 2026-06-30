@@ -10,6 +10,7 @@ pushed to `dev` (never direct to `main`).
 | 21 | Subscription tier checkout + recurring billing wired to payment hub. Buy/upgrade/cancel; tier names aligned with subscriptionGuard. | `src/lib/subscriptionService.ts` | on `dev` |
 | 22 | PK gateway edge functions (JazzCash/Easypaisa session builders) + ONE unified settlement webhook that fulfils by purpose (wallet/credits/subscription), idempotent. Server-side glue that makes redirect payments actually settle. | `supabase/functions/payments-jazzcash`, `payments-easypaisa`, `payments-settle`, `supabase/migrations/20260630_payment_settlements.sql` | on `dev` |
 | 28 | Wired CheckoutPage to the real payment hub (was demo-only). checkoutService bridges revenue/plans + credit packs onto paymentHub; redirect-aware; promo codes preserved. | `src/lib/revenue/checkoutService.ts`, `src/pages/CheckoutPage.tsx` | on `dev` |
+| 33 | Live billing: BillingPage now reads real subscription/invoices/credits and does real cancel/downgrade/pause (was hardcoded plan + fake invoices + toast-only cancel). | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
