@@ -32,8 +32,9 @@ pushed to `dev` (never direct to `main`).
 | 79 | AI Prompt Library on credited client. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
 | 82 | Project-scope AI assist helper. | `src/lib/ai/scopeAssist.ts` | on `dev` |
 | 83 | personalAssistant chat + recs on credited ai-universal. | `src/lib/ai/personalAssistant.ts` | on `dev` |
-| 84 | AIProjectScopePage blends credited AI estimate (closes #82 wiring). | `src/pages/AIProjectScopePage.tsx` | on `dev` |
-| 86 | useAIWorkflow routed through credited client; each AIFeature mapped to a (domain,action). Was hitting ai-workflow edge fn directly (no credits/Ollama). 4th credited-AI hook migration. | `src/hooks/useAIWorkflow.ts` | on `dev` |
+| 84 | AIProjectScopePage blends credited AI estimate. | `src/pages/AIProjectScopePage.tsx` | on `dev` |
+| 86 | useAIWorkflow routed through credited client. | `src/hooks/useAIWorkflow.ts` | on `dev` |
+| 87 | Single source of truth for credit pack pricing (creditPacks.ts). Real bug: packs diverged (aiCredits 199/799/1999/5999 vs checkout/panels 499/1799/3999) -> shown price != charged price. aiCredits now derives from the canonical catalog. | `src/lib/ai/creditPacks.ts`, `src/lib/ai/aiCredits.ts` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -44,20 +45,24 @@ pushed to `dev` (never direct to `main`).
 - Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
+- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87).
 - All work lands on `dev`; merge to `main` after review.
 - CI runs tests/financial/ as a MUST-pass gate.
 
 ## Credited-AI migration (mechanical, ongoing)
 Done: AIPromptLibraryPage (#79), scope assist + page (#82/#84), personalAssistant
-(#83), useAIWorkflow (#86). Remaining: audit any other direct supabase.functions
-AI calls during merge.
+(#83), useAIWorkflow (#86). Remaining: audit any other direct supabase.functions AI calls.
+
+## Consistency follow-ups (do during merge)
+- Point checkoutService.CREDIT_PACKS + BillingPage/AICreditsPanel hardcoded pack
+  arrays at src/lib/ai/creditPacks.ts (canonical) so all prices match (#87).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86/#87)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
