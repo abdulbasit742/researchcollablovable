@@ -3,6 +3,14 @@
 Autonomous build, one task per number. Each entry = a self-contained feature
 pushed to `dev` (never direct to `main`).
 
+## Latest: #100 revenue-doctor
+`scripts/revenue-doctor.ts` — one read-only command that audits whether the
+revenue + payouts stack is ready before flipping real money on. Verifies the 7
+migrations + 5 edge functions + core modules exist, reports each money rail's
+mode (sandbox vs live) from env, and flags unsafe combos (e.g. payments live
+but no gateway configured; payouts live but no disbursement keys). Executable
+form of docs/GO_LIVE.md. Run: `npx tsx scripts/revenue-doctor.ts`.
+
 | # | Feature | Files | Status |
 |---|---------|-------|--------|
 | 11 | Gateway-agnostic payment hub (JazzCash + Easypaisa + Stripe), dry-run safe. | `src/services/payments/*`, `docs/PAYMENTS.md` | on `dev` |
@@ -38,30 +46,29 @@ pushed to `dev` (never direct to `main`).
 | 90 | checkoutService credit packs derived from canonical catalog. | `src/lib/revenue/checkoutService.ts` | on `dev` |
 | 91 | AICreditsPanel renders packs from canonical catalog. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
 | 92 | Complete env reference (.env.example). | `.env.example` | on `dev` |
-| 94 | GO_LIVE runbook (migrations, sandbox-first, one rail at a time, smoke, rollback). | `docs/GO_LIVE.md` | on `dev` |
-| 95 | Payment-hub dry-run safety tests: no real charge in dry-run, currency->provider routing, amount/idempotency validation. Covers the stack's most important safety property under the CI financial gate. | `tests/financial/paymentHub.test.ts` | on `dev` |
+| 94 | GO_LIVE runbook. | `docs/GO_LIVE.md` | on `dev` |
+| 95 | Payment-hub dry-run safety tests. | `tests/financial/paymentHub.test.ts` | on `dev` |
+| 100 | revenue-doctor go-live readiness check (read-only). | `scripts/revenue-doctor.ts` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
 
 ## Conventions
-- Services export an object of async methods under `src/services/`.
-- Imports via `@/` alias. Dry-run / safe-by-default for anything touching money (in AND out).
-- Secret keys never in the browser bundle (delegated to Supabase Edge Functions). Full env reference in .env.example (#92).
+- Dry-run / safe-by-default for anything touching money (in AND out).
+- Secret keys never in the browser bundle (delegated to Supabase Edge Functions). Full env reference in .env.example.
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
-- AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
-- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91).
+- AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal.
+- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY.
 - All work lands on `dev`; merge to `main` after review.
-- CI runs tests/financial/ as a MUST-pass gate (commission #76 + payment-hub dry-run #95).
-- Going live: follow docs/GO_LIVE.md (#94).
+- CI runs tests/financial/ as a MUST-pass gate (#76 + #95).
+- Going live: follow docs/GO_LIVE.md; verify with scripts/revenue-doctor.ts.
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86/#87/#90/#91)
-3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
-Growth: referral rewards (#61/#62/#63/#70/#72).
+1. Subscriptions  2. AI credits  3. Marketplace commission  4. Visibility boosts
+Growth: referral rewards.
 
-## STATUS: feature-complete revenue + growth stack on `dev`. PR #1 open. See docs/GO_LIVE.md to deploy.
+## STATUS: feature-complete revenue + growth stack on `dev`. PR #1 open. Verify with revenue-doctor, deploy via GO_LIVE.md.
