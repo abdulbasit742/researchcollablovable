@@ -10,25 +10,26 @@ pushed to `dev` (never direct to `main`).
 | 21 | Subscription tier checkout + recurring billing. | `src/lib/subscriptionService.ts` | on `dev` |
 | 22 | PK gateway edge functions + unified settlement webhook (idempotent). | `supabase/functions/payments-*`, `supabase/migrations/20260630_payment_settlements.sql` | on `dev` |
 | 28 | Wired CheckoutPage to the real payment hub. | `src/lib/revenue/checkoutService.ts`, `src/pages/CheckoutPage.tsx` | on `dev` |
-| 33 | Live billing: real subscription/invoices/credits + cancel/downgrade/pause. | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
-| 34 | Marketplace service orders: escrow -> deliver -> accept minus platform commission. | `src/lib/marketplaceService.ts`, `supabase/migrations/20260630_marketplace_orders.sql` | on `dev` |
-| 36 | Platform earnings aggregator across all streams. | `src/lib/revenue/platformEarnings.ts` | on `dev` |
+| 33 | Live billing. | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
+| 34 | Marketplace service orders + commission. | `src/lib/marketplaceService.ts`, `supabase/migrations/20260630_marketplace_orders.sql` | on `dev` |
+| 36 | Platform earnings aggregator. | `src/lib/revenue/platformEarnings.ts` | on `dev` |
 | 42 | Admin finance counts ALL revenue + MRR + persists commission rate. | `src/hooks/useAdminFinance.ts`, `src/lib/admin/commissionSettings.ts`, `supabase/migrations/20260630_platform_settings.sql` | on `dev` |
 | 44 | Client-side credit enforcement wrapper for the assistant. | `src/lib/ai/creditedAssistant.ts` | on `dev` |
 | 46 | AICreditsPanel reads REAL balance + live ledger. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
-| 47 | Visibility boosts wired to wallet + platform revenue (4th stream). | `src/lib/revenue/boostService.ts`, `supabase/migrations/20260630_visibility_boosts.sql` | on `dev` |
+| 47 | Visibility boosts (4th stream). | `src/lib/revenue/boostService.ts`, `supabase/migrations/20260630_visibility_boosts.sql` | on `dev` |
 | 49 | Local-first AI routing: Ollama first, Lovable fallback only. | `supabase/functions/_shared/llmRouter.ts`, `supabase/functions/ai-universal/index.ts`, `docs/AI_ROUTING.md` | on `dev` |
 | 51 | SERVER-side AI credit enforcement in ai-universal. | `supabase/functions/_shared/aiCreditGuard.ts`, `supabase/functions/ai-universal/index.ts` | on `dev` |
-| 53 | Payout / cash-out pipeline: request -> approve -> disburse (dry-run safe). | `src/lib/revenue/payoutService.ts`, `supabase/migrations/20260630_payouts.sql` | on `dev` |
-| 55 | Server-side payout disbursement edge fn (live cash-out), idempotent. | `supabase/functions/payouts-disburse/index.ts` | on `dev` |
+| 53 | Payout / cash-out pipeline. | `src/lib/revenue/payoutService.ts`, `supabase/migrations/20260630_payouts.sql` | on `dev` |
+| 55 | Server-side payout disbursement edge fn. | `supabase/functions/payouts-disburse/index.ts` | on `dev` |
 | 61 | Referral reward fulfillment. | `src/lib/referral/referralRewards.ts` | on `dev` |
 | 62 | Referral hooks (capture/signup/first-purchase). | `src/lib/referral/referralHooks.ts` | on `dev` |
-| 63 | Wired captureReferralFromUrl() into main.tsx bootstrap. | `src/main.tsx` | on `dev` |
-| 70 | Wired onSignupComplete() into AuthPage post-auth redirect. | `src/pages/AuthPage.tsx` | on `dev` |
-| 72 | Wired first-purchase referral payout into the settlement webhook. | `supabase/functions/payments-settle/index.ts` | on `dev` |
+| 63 | Wired captureReferralFromUrl() into main.tsx. | `src/main.tsx` | on `dev` |
+| 70 | Wired onSignupComplete() into AuthPage. | `src/pages/AuthPage.tsx` | on `dev` |
+| 72 | Wired first-purchase referral payout into settlement webhook. | `supabase/functions/payments-settle/index.ts` | on `dev` |
 | 73 | Shared credited ai-universal client (handles 402 + top-up). | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
 | 74 | Seed subscription_tiers so plan checkout resolves tier_id. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
-| 76 | Financial tests for commission math (calcCommission/COMMISSION_RATE): split correctness, per-tier rates, rounding, fee+net===gross invariant. Makes CI's MUST-pass financial gate actually cover the new revenue logic. | `tests/financial/revenue.test.ts` | on `dev` |
+| 76 | Financial tests for commission math (CI gate now covers revenue). | `tests/financial/revenue.test.ts` | on `dev` |
+| 79 | AI Prompt Library now runs through the credited client (was calling execution-assistant directly, free + unmetered). Charges credits, 402 top-up UX, local-Ollama routing. First domain-hook migration to #73. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -40,14 +41,19 @@ pushed to `dev` (never direct to `main`).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
 - All work lands on `dev`; merge to `main` after review.
-- CI runs tests/financial/ as a MUST-pass gate (#76 adds commission coverage).
+- CI runs tests/financial/ as a MUST-pass gate.
+
+## Credited-AI migration (mechanical, ongoing)
+Move ad-hoc AI callers onto callAIUniversal/streamAIUniversal so all get credit
+enforcement + 402 top-up UX. Done: AIPromptLibraryPage (#79). Remaining: other
+domain hooks/pages that call AI edge fns directly (execution-assistant, etc.).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
