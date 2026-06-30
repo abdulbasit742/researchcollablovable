@@ -37,8 +37,9 @@ pushed to `dev` (never direct to `main`).
 | 87 | Single source of truth for credit pack pricing (creditPacks.ts). | `src/lib/ai/creditPacks.ts`, `src/lib/ai/aiCredits.ts` | on `dev` |
 | 90 | checkoutService credit packs derived from canonical catalog. | `src/lib/revenue/checkoutService.ts` | on `dev` |
 | 91 | AICreditsPanel renders packs from canonical catalog. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
-| 92 | Complete env reference (.env.example): client flags + server-only secrets. | `.env.example` | on `dev` |
-| 94 | GO_LIVE runbook: ordered migrations, sandbox-first, go-live one rail at a time, per-path smoke checklist, env-flip rollback. Ties #11-#92 into a deployment guide. Doc-only. | `docs/GO_LIVE.md` | on `dev` |
+| 92 | Complete env reference (.env.example). | `.env.example` | on `dev` |
+| 94 | GO_LIVE runbook (migrations, sandbox-first, one rail at a time, smoke, rollback). | `docs/GO_LIVE.md` | on `dev` |
+| 95 | Payment-hub dry-run safety tests: no real charge in dry-run, currency->provider routing, amount/idempotency validation. Covers the stack's most important safety property under the CI financial gate. | `tests/financial/paymentHub.test.ts` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -51,7 +52,7 @@ pushed to `dev` (never direct to `main`).
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
 - Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91).
 - All work lands on `dev`; merge to `main` after review.
-- CI runs tests/financial/ as a MUST-pass gate.
+- CI runs tests/financial/ as a MUST-pass gate (commission #76 + payment-hub dry-run #95).
 - Going live: follow docs/GO_LIVE.md (#94).
 
 ## Money flow complete (both directions, server-enforced)
