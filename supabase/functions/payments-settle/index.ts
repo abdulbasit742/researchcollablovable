@@ -15,12 +15,15 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const JAZZCASH_SALT = Deno.env.get("JAZZCASH_INTEGRITY_SALT") ?? "";
 const EASYPAISA_HASH_KEY = Deno.env.get("EASYPAISA_HASH_KEY") ?? "";
 
+// Referrer cash bonus (PKR) when a referred user makes their first payment.
+// Mirrors REFERRAL_REWARDS.referrerFirstPurchaseCashPKR on the client (#61).
+const REFERRER_FIRST_PURCHASE_CASH_PKR = 200;
+
 interface Callback {
   provider: "jazzcash" | "easypaisa";
   providerRef: string;
   success: boolean;
   signature: string;
-  // Echoed back from the original charge (JazzCash ppmpf_*, Easypaisa params).
   userId: string;
   purpose: string;
   amount: number;
@@ -51,6 +54,14 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (existing?.status === "settled") return json({ ok: true, fulfilled: false, reason: "already settled" });
 
+    // Is this the user's first settled payment? (check BEFORE we insert this one)
+    const { count: priorSettled } = await admin
+      .from("payment_settlements")
+      .select("provider_ref", { count: "exact", head: true })
+      .eq("user_id", cb.userId)
+      .eq("status", "settled");
+    const isFirstPayment = (priorSettled ?? 0) === 0;
+
     await fulfil(admin, cb);
 
     await admin.from("payment_settlements").upsert(
@@ -66,6 +77,16 @@ Deno.serve(async (req) => {
       },
       { onConflict: "provider_ref" },
     );
+
+    // Referral: pay the referrer on this user's FIRST settled payment (#72).
+    // Non-blocking — never fail the settlement over a referral bonus.
+    if (isFirstPayment) {
+      try {
+        await fulfilReferralFirstPurchase(admin, cb.userId);
+      } catch (e) {
+        console.warn("referral first-purchase payout skipped:", (e as Error).message);
+      }
+    }
 
     return json({ ok: true, fulfilled: true });
   } catch (e) {
@@ -132,6 +153,46 @@ async function fulfil(admin: any, cb: Callback): Promise<void> {
       // checkout / fyp_service / dataset: record only; domain code reconciles.
       break;
   }
+}
+
+/**
+ * On a referred user's first settled payment, pay the referrer a one-time cash
+ * bonus. Mirrors referralRewards.fulfilOnFirstPurchase (#61) but runs here on
+ * the server so it can't be bypassed. Idempotent via vrl_rewards guard.
+ */
+// deno-lint-ignore no-explicit-any
+async function fulfilReferralFirstPurchase(admin: any, userId: string): Promise<void> {
+  // Find the referral where this user was the referred party.
+  const { data: ref } = await admin
+    .from("vrl_referrals")
+    .select("id, referrer_user_id")
+    .eq("referred_user_id", userId)
+    .limit(1)
+    .maybeSingle();
+  if (!ref?.referrer_user_id) return;
+
+  // Idempotency: skip if this reward was already granted.
+  const { data: already } = await admin
+    .from("vrl_rewards")
+    .select("id")
+    .eq("referral_id", ref.id)
+    .eq("reward_type", "referrer_first_purchase_cash")
+    .maybeSingle();
+  if (already) return;
+
+  await admin.rpc("credit_wallet", {
+    p_user_id: ref.referrer_user_id,
+    p_amount: REFERRER_FIRST_PURCHASE_CASH_PKR,
+    p_ref: `referral_cash_${ref.id}`,
+  });
+  await admin.from("vrl_rewards").insert({
+    user_id: ref.referrer_user_id,
+    referral_id: ref.id,
+    reward_type: "referrer_first_purchase_cash",
+    reward_value: REFERRER_FIRST_PURCHASE_CASH_PKR,
+    description: `PKR ${REFERRER_FIRST_PURCHASE_CASH_PKR} bonus: referred user made first purchase`,
+    status: "granted",
+  });
 }
 
 function json(data: unknown, status = 200): Response {
