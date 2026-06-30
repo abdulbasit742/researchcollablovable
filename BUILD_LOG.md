@@ -37,7 +37,8 @@ pushed to `dev` (never direct to `main`).
 | 87 | Single source of truth for credit pack pricing (creditPacks.ts). | `src/lib/ai/creditPacks.ts`, `src/lib/ai/aiCredits.ts` | on `dev` |
 | 90 | checkoutService credit packs derived from canonical catalog. | `src/lib/revenue/checkoutService.ts` | on `dev` |
 | 91 | AICreditsPanel renders packs from canonical catalog. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
-| 92 | Complete env reference: .env.example now documents payments dry-run/provider toggles + payout dry-run (client), and lists all server-only edge-function secrets (AI routing, credit enforcement, gateway + disbursement keys) separately. Prevents silent deploy misconfig. | `.env.example` | on `dev` |
+| 92 | Complete env reference (.env.example): client flags + server-only secrets. | `.env.example` | on `dev` |
+| 94 | GO_LIVE runbook: ordered migrations, sandbox-first, go-live one rail at a time, per-path smoke checklist, env-flip rollback. Ties #11-#92 into a deployment guide. Doc-only. | `docs/GO_LIVE.md` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -51,6 +52,7 @@ pushed to `dev` (never direct to `main`).
 - Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91).
 - All work lands on `dev`; merge to `main` after review.
 - CI runs tests/financial/ as a MUST-pass gate.
+- Going live: follow docs/GO_LIVE.md (#94).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
@@ -61,4 +63,4 @@ pushed to `dev` (never direct to `main`).
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
-## STATUS: feature-complete revenue + growth stack on `dev`. PR #1 open for review + merge.
+## STATUS: feature-complete revenue + growth stack on `dev`. PR #1 open. See docs/GO_LIVE.md to deploy.
