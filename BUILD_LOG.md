@@ -36,7 +36,8 @@ pushed to `dev` (never direct to `main`).
 | 86 | useAIWorkflow routed through credited client. | `src/hooks/useAIWorkflow.ts` | on `dev` |
 | 87 | Single source of truth for credit pack pricing (creditPacks.ts). | `src/lib/ai/creditPacks.ts`, `src/lib/ai/aiCredits.ts` | on `dev` |
 | 90 | checkoutService credit packs derived from canonical catalog. | `src/lib/revenue/checkoutService.ts` | on `dev` |
-| 91 | AICreditsPanel renders packs from the canonical catalog (was hardcoded 3 packs, missing 12000). Last pricing-consistency follow-up closed: catalog -> aiCredits + checkout + panel all agree. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
+| 91 | AICreditsPanel renders packs from canonical catalog. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
+| 92 | Complete env reference: .env.example now documents payments dry-run/provider toggles + payout dry-run (client), and lists all server-only edge-function secrets (AI routing, credit enforcement, gateway + disbursement keys) separately. Prevents silent deploy misconfig. | `.env.example` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -44,14 +45,12 @@ pushed to `dev` (never direct to `main`).
 ## Conventions
 - Services export an object of async methods under `src/services/`.
 - Imports via `@/` alias. Dry-run / safe-by-default for anything touching money (in AND out).
-- Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
+- Secret keys never in the browser bundle (delegated to Supabase Edge Functions). Full env reference in .env.example (#92).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
-- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91) — now consistent across aiCredits, checkout, and the panel.
+- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91).
 - All work lands on `dev`; merge to `main` after review.
 - CI runs tests/financial/ as a MUST-pass gate.
-
-## Credited-AI migration: Prompt Library (#79), scope (#82/#84), personalAssistant (#83), useAIWorkflow (#86). Pricing consistency: COMPLETE (#87/#90/#91).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
