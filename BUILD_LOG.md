@@ -24,7 +24,8 @@ pushed to `dev` (never direct to `main`).
 | 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution. | `src/lib/referral/referralRewards.ts` | on `dev` |
 | 62 | Referral hooks: capture ?ref=, fulfil on signup, pay cash on first purchase. | `src/lib/referral/referralHooks.ts` | on `dev` |
 | 63 | Wired captureReferralFromUrl() into main.tsx bootstrap. | `src/main.tsx` | on `dev` |
-| 70 | Wired onSignupComplete() into AuthPage post-auth redirect (fires once per user, idempotent). 2nd pending-wiring item closed. | `src/pages/AuthPage.tsx` | on `dev` |
+| 70 | Wired onSignupComplete() into AuthPage post-auth redirect (once per user). | `src/pages/AuthPage.tsx` | on `dev` |
+| 72 | Wired first-purchase referral payout into the settlement webhook (server-side, can't be bypassed): on a user's FIRST settled payment, pay referrer cash. Idempotent + non-blocking. 3rd pending-wiring item closed. | `supabase/functions/payments-settle/index.ts` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -37,8 +38,8 @@ pushed to `dev` (never direct to `main`).
 ## Wiring still TODO (call from existing flows during merge review)
 - [x] `captureReferralFromUrl()` in app bootstrap (main.tsx) — #63.
 - [x] `onSignupComplete(userId)` on first authenticated landing (AuthPage) — #70.
-- [ ] `onFirstPurchase(userId)` after first settled payment (settlement webhook / billing success).
-- [ ] Ensure assistant UI calls the credited path (creditedStreamChat).
+- [x] First-purchase referral payout in settlement webhook — #72 (server-side, supersedes client onFirstPurchase).
+- [ ] Ensure assistant UI calls the credited path (creditedStreamChat) — last item.
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
@@ -47,4 +48,4 @@ pushed to `dev` (never direct to `main`).
 ## Revenue streams live
 1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51)
 3. Marketplace commission (#34)  4. Visibility boosts (#47)
-Growth: referral rewards (#61) fired by hooks (#62), captured at bootstrap (#63), converted on signup (#70).
+Growth: referral rewards (#61) fired by hooks (#62), captured at bootstrap (#63), converted on signup (#70), first-purchase cash via settlement (#72).
