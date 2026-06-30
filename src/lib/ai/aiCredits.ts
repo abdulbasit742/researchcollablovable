@@ -9,22 +9,20 @@
  * balances live in their own Supabase tables (`ai_credit_balances`,
  * `ai_credit_ledger`). Purchases route through the payment hub (#11), which is
  * dry-run safe by default.
+ *
+ * Pack pricing is sourced from creditPacks.ts (single source of truth, #87).
  */
 import { supabase } from "@/integrations/supabase/client";
 import { paymentHub } from "@/services/payments";
-import type { Currency } from "@/services/payments";
+import { CREDIT_PACKS as CATALOG, getCreditPack, type CreditPack } from "@/lib/ai/creditPacks";
+
+export type { CreditPack } from "@/lib/ai/creditPacks";
+
+// Re-export the canonical catalog so existing imports of CREDIT_PACKS from this
+// module keep working but now share one source of truth.
+export const CREDIT_PACKS: CreditPack[] = CATALOG;
 
 // ─── Types ───
-
-export interface CreditPack {
-  id: string;
-  label: string;
-  credits: number;
-  price: number;
-  currency: Currency;
-  /** Marketing badge, e.g. "Best value". */
-  badge?: string;
-}
 
 export interface CreditBalance {
   userId: string;
@@ -41,7 +39,7 @@ export type CreditAction =
   | "chat_message"
   | "dataset_insight";
 
-/** Credits charged per AI action. Tune freely — cost basis is ~0. */
+/** Credits charged per AI action (client-side preview; server is authoritative). */
 export const ACTION_COST: Record<CreditAction, number> = {
   proposal_draft: 20,
   paper_summarize: 10,
@@ -50,14 +48,6 @@ export const ACTION_COST: Record<CreditAction, number> = {
   chat_message: 1,
   dataset_insight: 8,
 };
-
-/** Catalog of purchasable packs. PKR-first; tweak pricing as needed. */
-export const CREDIT_PACKS: CreditPack[] = [
-  { id: "starter", label: "Starter", credits: 100, price: 199, currency: "PKR" },
-  { id: "student", label: "Student", credits: 500, price: 799, currency: "PKR", badge: "Popular" },
-  { id: "pro", label: "Pro", credits: 1500, price: 1999, currency: "PKR", badge: "Best value" },
-  { id: "lab", label: "Research Lab", credits: 5000, price: 5999, currency: "PKR" },
-];
 
 // ─── Balance ───
 
@@ -94,13 +84,8 @@ export interface PurchaseResult {
   redirectUrl?: string;
 }
 
-/**
- * Buy a credit pack. Charges via the payment hub, then (on settled/simulated
- * success) credits the user's AI balance. Redirect-based gateways settle later
- * via webhook, so we return the redirectUrl and credit on callback instead.
- */
 export async function purchasePack(packId: string): Promise<PurchaseResult> {
-  const pack = CREDIT_PACKS.find((p) => p.id === packId);
+  const pack = getCreditPack(packId);
   if (!pack) throw new Error(`Unknown credit pack: ${packId}`);
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -136,10 +121,6 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
-/**
- * Debit credits for an action. Throws InsufficientCreditsError if the user
- * can't afford it (the UI should catch this and prompt a top-up).
- */
 export async function spend(action: CreditAction, note?: string): Promise<CreditBalance> {
   const cost = ACTION_COST[action];
   const { data: { user } } = await supabase.auth.getUser();
@@ -155,18 +136,12 @@ export async function spend(action: CreditAction, note?: string): Promise<Credit
   return getBalance();
 }
 
-/**
- * Wrap any async AI call so credits are debited only when the call succeeds.
- * Usage:
- *   const out = await meterUsage("proposal_draft", () => llm.generate(prompt));
- */
 export async function meterUsage<T>(action: CreditAction, run: () => Promise<T>): Promise<T> {
   if (!(await hasCreditsFor(action))) {
     const { balance } = await getBalance();
     throw new InsufficientCreditsError(ACTION_COST[action], balance);
   }
   const result = await run();
-  // Debit after success so failed generations don't cost the user.
   await spend(action, `metered:${action}`);
   return result;
 }
@@ -183,7 +158,6 @@ async function applyDelta(
   delta: number,
   lifetime: { purchased?: number; spent?: number },
 ): Promise<void> {
-  // Prefer an atomic RPC if present; fall back to read-modify-write.
   const { error: rpcError } = await (supabase as any).rpc("apply_ai_credit_delta", {
     p_user_id: userId,
     p_delta: delta,
