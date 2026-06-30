@@ -8,7 +8,7 @@ pushed to `dev` (never direct to `main`).
 | 11 | Gateway-agnostic payment hub (JazzCash + Easypaisa + Stripe), dry-run safe. | `src/services/payments/*`, `docs/PAYMENTS.md` | on `dev` |
 | 13 | Sellable AI credit packs metered on local Ollama. | `src/lib/ai/aiCredits.ts`, `supabase/migrations/20260630_ai_credits.sql` | on `dev` |
 | 21 | Subscription tier checkout + recurring billing. | `src/lib/subscriptionService.ts` | on `dev` |
-| 22 | PK gateway edge functions + unified settlement webhook (idempotent). | `supabase/functions/payments-jazzcash`, `payments-easypaisa`, `payments-settle`, `supabase/migrations/20260630_payment_settlements.sql` | on `dev` |
+| 22 | PK gateway edge functions + unified settlement webhook (idempotent). | `supabase/functions/payments-*`, `supabase/migrations/20260630_payment_settlements.sql` | on `dev` |
 | 28 | Wired CheckoutPage to the real payment hub. | `src/lib/revenue/checkoutService.ts`, `src/pages/CheckoutPage.tsx` | on `dev` |
 | 33 | Live billing: real subscription/invoices/credits + cancel/downgrade/pause. | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
 | 34 | Marketplace service orders: escrow -> deliver -> accept minus platform commission. | `src/lib/marketplaceService.ts`, `supabase/migrations/20260630_marketplace_orders.sql` | on `dev` |
@@ -21,9 +21,10 @@ pushed to `dev` (never direct to `main`).
 | 51 | SERVER-side AI credit enforcement in ai-universal. | `supabase/functions/_shared/aiCreditGuard.ts`, `supabase/functions/ai-universal/index.ts` | on `dev` |
 | 53 | Payout / cash-out pipeline: request -> approve -> disburse (dry-run safe). | `src/lib/revenue/payoutService.ts`, `supabase/migrations/20260630_payouts.sql` | on `dev` |
 | 55 | Server-side payout disbursement edge fn (live cash-out), idempotent. | `supabase/functions/payouts-disburse/index.ts` | on `dev` |
-| 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution. Idempotent. | `src/lib/referral/referralRewards.ts` | on `dev` |
+| 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution. | `src/lib/referral/referralRewards.ts` | on `dev` |
 | 62 | Referral hooks: capture ?ref=, fulfil on signup, pay cash on first purchase. | `src/lib/referral/referralHooks.ts` | on `dev` |
-| 63 | Wired captureReferralFromUrl() into main.tsx bootstrap so ?ref= is stashed before React mounts. First pending-wiring item closed. | `src/main.tsx` | on `dev` |
+| 63 | Wired captureReferralFromUrl() into main.tsx bootstrap. | `src/main.tsx` | on `dev` |
+| 70 | Wired onSignupComplete() into AuthPage post-auth redirect (fires once per user, idempotent). 2nd pending-wiring item closed. | `src/pages/AuthPage.tsx` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -34,8 +35,8 @@ pushed to `dev` (never direct to `main`).
 - All work lands on `dev`; merge to `main` after review.
 
 ## Wiring still TODO (call from existing flows during merge review)
-- [x] `captureReferralFromUrl()` in app bootstrap (main.tsx) — done #63.
-- [ ] `onSignupComplete(userId)` right after AuthPage signup success.
+- [x] `captureReferralFromUrl()` in app bootstrap (main.tsx) — #63.
+- [x] `onSignupComplete(userId)` on first authenticated landing (AuthPage) — #70.
 - [ ] `onFirstPurchase(userId)` after first settled payment (settlement webhook / billing success).
 - [ ] Ensure assistant UI calls the credited path (creditedStreamChat).
 
@@ -46,4 +47,4 @@ pushed to `dev` (never direct to `main`).
 ## Revenue streams live
 1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51)
 3. Marketplace commission (#34)  4. Visibility boosts (#47)
-Growth: referral rewards (#61) fired by hooks (#62), captured at bootstrap (#63).
+Growth: referral rewards (#61) fired by hooks (#62), captured at bootstrap (#63), converted on signup (#70).
