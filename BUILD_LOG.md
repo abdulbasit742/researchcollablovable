@@ -11,6 +11,7 @@ pushed to `dev` (never direct to `main`).
 | 22 | PK gateway edge functions (JazzCash/Easypaisa session builders) + ONE unified settlement webhook that fulfils by purpose (wallet/credits/subscription), idempotent. Server-side glue that makes redirect payments actually settle. | `supabase/functions/payments-jazzcash`, `payments-easypaisa`, `payments-settle`, `supabase/migrations/20260630_payment_settlements.sql` | on `dev` |
 | 28 | Wired CheckoutPage to the real payment hub (was demo-only). checkoutService bridges revenue/plans + credit packs onto paymentHub; redirect-aware; promo codes preserved. | `src/lib/revenue/checkoutService.ts`, `src/pages/CheckoutPage.tsx` | on `dev` |
 | 33 | Live billing: BillingPage now reads real subscription/invoices/credits and does real cancel/downgrade/pause (was hardcoded plan + fake invoices + toast-only cancel). | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
+| 34 | Marketplace service orders: wallet-funded escrow -> deliver -> accept releases to seller MINUS platform commission (rate from seller's plan); fee recorded as platform revenue. Buyer auto-topup via payment hub. | `src/lib/marketplaceService.ts`, `supabase/migrations/20260630_marketplace_orders.sql` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
