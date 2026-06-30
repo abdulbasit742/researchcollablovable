@@ -17,16 +17,18 @@ pushed to `dev` (never direct to `main`).
 | 44 | Enforce AI credits on assistant calls. creditedAssistant wraps streamChat/recommendations: pre-check balance, debit on success only. | `src/lib/ai/creditedAssistant.ts` | on `dev` |
 | 46 | AICreditsPanel reads REAL balance + live ledger (was hardcoded demo + SAMPLE_HISTORY). Top-up buttons deep-link to checkout (#28). | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
 | 47 | Visibility boosts wired to wallet + platform revenue (4th stream). boostService: charge wallet (auto top-up via #11 if short), book income, time-boxed boost that auto-lapses. | `src/lib/revenue/boostService.ts`, `supabase/migrations/20260630_visibility_boosts.sql` | on `dev` |
+| 49 | Local-first AI routing: ai-universal now goes through Ollama (qwen2.5) first, Lovable PAID gateway only as fallback. Slashes marginal AI cost to ~0 = AI-credit margin near-pure. | `supabase/functions/_shared/llmRouter.ts`, `supabase/functions/ai-universal/index.ts`, `docs/AI_ROUTING.md` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
 - Imports via `@/` alias. Dry-run / safe-by-default for anything touching money.
 - Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
+- AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - All work lands on `dev`; merge to `main` after review.
 
 ## Revenue streams now live (all dry-run safe)
 1. **Subscriptions** (#21/#28/#33) — recurring tiers, biggest for Department/Institutional.
-2. **AI credits** (#13/#44/#46) — near-pure margin (local Ollama); enforced on AI calls + live UI.
+2. **AI credits** (#13/#44/#46) — near-pure margin (local Ollama #49); enforced on AI calls + live UI.
 3. **Marketplace commission** (#34) — % cut on every service order.
 4. **Visibility boosts** (#47) — paid, time-boxed profile/bid/project/opportunity boosts.
 All roll up into platform earnings (#36) and show in the admin finance dashboard (#42).
