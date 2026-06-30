@@ -13,7 +13,8 @@ pushed to `dev` (never direct to `main`).
 | 33 | Live billing: BillingPage now reads real subscription/invoices/credits and does real cancel/downgrade/pause. | `src/lib/revenue/billingService.ts`, `src/pages/BillingPage.tsx` | on `dev` |
 | 34 | Marketplace service orders: wallet-funded escrow -> deliver -> accept releases to seller MINUS platform commission; fee recorded as platform revenue. | `src/lib/marketplaceService.ts`, `supabase/migrations/20260630_marketplace_orders.sql` | on `dev` |
 | 36 | Platform earnings aggregator: true platform take across subscriptions + AI credits + marketplace commission. total/by-stream/MRR/rolling windows/12-mo series. | `src/lib/revenue/platformEarnings.ts` | on `dev` |
-| 42 | Admin finance dashboard now counts ALL revenue streams (#36) not just tool orders, exposes MRR + by-stream mix, and PERSISTS the commission rate (was a no-op toast). | `src/hooks/useAdminFinance.ts`, `src/lib/admin/commissionSettings.ts`, `supabase/migrations/20260630_platform_settings.sql` | on `dev` |
+| 42 | Admin finance dashboard now counts ALL revenue streams (#36) not just tool orders, exposes MRR + by-stream mix, and PERSISTS the commission rate. | `src/hooks/useAdminFinance.ts`, `src/lib/admin/commissionSettings.ts`, `supabase/migrations/20260630_platform_settings.sql` | on `dev` |
+| 44 | Enforce AI credits on assistant calls. #13 built credits + meterUsage but nothing called it, so AI ran free/unlimited. creditedAssistant wraps streamChat/recommendations: pre-check balance, debit on success only. | `src/lib/ai/creditedAssistant.ts` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -23,6 +24,6 @@ pushed to `dev` (never direct to `main`).
 
 ## Revenue streams now live (all dry-run safe)
 1. **Subscriptions** (#21/#28/#33) — recurring tiers, biggest for Department/Institutional.
-2. **AI credits** (#13) — near-pure margin (local Ollama).
+2. **AI credits** (#13) — near-pure margin (local Ollama); now actually enforced on AI calls (#44).
 3. **Marketplace commission** (#34) — % cut on every service order.
-All three roll up into platform earnings (#36) and now show in the admin finance dashboard (#42).
+All three roll up into platform earnings (#36) and show in the admin finance dashboard (#42).
