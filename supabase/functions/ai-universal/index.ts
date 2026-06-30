@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeChatCompletion } from "../_shared/llmRouter.ts";
+import { costFor, creditsEnforced, checkBalance, debit, refund } from "../_shared/aiCreditGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,9 +95,25 @@ serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const userId = claimsData.claims.sub as string;
 
     const { domain, action, context, messages, stream } = await req.json();
-    const systemPrompt = getSystemPrompt(domain || "general", action || "chat");
+    const dom = domain || "general";
+    const act = action || "chat";
+    const systemPrompt = getSystemPrompt(dom, act);
+
+    // ── Credit enforcement (server-side, authoritative) ──
+    const cost = costFor(dom, act);
+    const enforce = creditsEnforced();
+    if (enforce) {
+      const bal = await checkBalance(userId, cost);
+      if (!bal.ok) {
+        return new Response(
+          JSON.stringify({ error: "Insufficient AI credits", needed: bal.needed, available: bal.available }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // Build messages array
     const aiMessages: { role: string; content: string }[] = [
@@ -113,18 +130,27 @@ serve(async (req) => {
 
     const shouldStream = stream === true;
 
+    // For streams we must debit up front (can't post-check a stream); refund if
+    // the upstream call errors before any output.
+    if (enforce && shouldStream) {
+      await debit(userId, cost, `${dom}.${act}`);
+    }
+
     // Route through local Ollama first (cost ~0), Lovable as fallback (#49).
-    const { response, provider } = await routeChatCompletion({ messages: aiMessages, stream: shouldStream });
+    let routed;
+    try {
+      routed = await routeChatCompletion({ messages: aiMessages, stream: shouldStream });
+    } catch (e) {
+      if (enforce && shouldStream) await refund(userId, cost, `${dom}.${act}`);
+      throw e;
+    }
+    const { response, provider } = routed;
 
     if (!response.ok) {
+      if (enforce && shouldStream) await refund(userId, cost, `${dom}.${act}`);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits in Settings." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
@@ -142,6 +168,11 @@ serve(async (req) => {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
+
+    // Non-streaming: debit only on a successful, non-empty generation.
+    if (enforce && content) {
+      await debit(userId, cost, `${dom}.${act}`);
+    }
 
     let result;
     try {
