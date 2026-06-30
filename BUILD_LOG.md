@@ -26,10 +26,11 @@ pushed to `dev` (never direct to `main`).
 | 63 | Wired captureReferralFromUrl() into main.tsx. | `src/main.tsx` | on `dev` |
 | 70 | Wired onSignupComplete() into AuthPage. | `src/pages/AuthPage.tsx` | on `dev` |
 | 72 | Wired first-purchase referral payout into settlement webhook. | `supabase/functions/payments-settle/index.ts` | on `dev` |
-| 73 | Shared credited ai-universal client (handles 402 + top-up). | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
-| 74 | Seed subscription_tiers so plan checkout resolves tier_id. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
-| 76 | Financial tests for commission math (CI gate now covers revenue). | `tests/financial/revenue.test.ts` | on `dev` |
-| 79 | AI Prompt Library now runs through the credited client (was calling execution-assistant directly, free + unmetered). Charges credits, 402 top-up UX, local-Ollama routing. First domain-hook migration to #73. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
+| 73 | Shared credited ai-universal client (402 + top-up). | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
+| 74 | Seed subscription_tiers. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
+| 76 | Financial tests for commission math. | `tests/financial/revenue.test.ts` | on `dev` |
+| 79 | AI Prompt Library on credited client. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
+| 82 | Project-scope AI assist: real credited `deals.analyze-scope` via the client, with local heuristic fallback (page's 'AI estimate' was a setTimeout fake). 2nd credited-AI hook migration. | `src/lib/ai/scopeAssist.ts` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -44,16 +45,19 @@ pushed to `dev` (never direct to `main`).
 - CI runs tests/financial/ as a MUST-pass gate.
 
 ## Credited-AI migration (mechanical, ongoing)
-Move ad-hoc AI callers onto callAIUniversal/streamAIUniversal so all get credit
-enforcement + 402 top-up UX. Done: AIPromptLibraryPage (#79). Remaining: other
-domain hooks/pages that call AI edge fns directly (execution-assistant, etc.).
+Move ad-hoc AI callers onto callAIUniversal/streamAIUniversal for credit
+enforcement + 402 top-up UX. Done: AIPromptLibraryPage (#79), project-scope
+assist helper (#82). Page-level wiring for #82: AIProjectScopePage.generateResults()
+should `await analyzeScopeWithAI(...)` and blend its result, falling back to
+generateEstimate() when null (small mechanical edit, do during merge). Remaining:
+other direct AI callers (execution-assistant, pai-assistant, etc.).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
