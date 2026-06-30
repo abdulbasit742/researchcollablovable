@@ -15,7 +15,8 @@ pushed to `dev` (never direct to `main`).
 | 36 | Platform earnings aggregator: true platform take across subscriptions + AI credits + marketplace commission. total/by-stream/MRR/rolling windows/12-mo series. | `src/lib/revenue/platformEarnings.ts` | on `dev` |
 | 42 | Admin finance dashboard now counts ALL revenue streams (#36) not just tool orders, exposes MRR + by-stream mix, and PERSISTS the commission rate. | `src/hooks/useAdminFinance.ts`, `src/lib/admin/commissionSettings.ts`, `supabase/migrations/20260630_platform_settings.sql` | on `dev` |
 | 44 | Enforce AI credits on assistant calls. creditedAssistant wraps streamChat/recommendations: pre-check balance, debit on success only. | `src/lib/ai/creditedAssistant.ts` | on `dev` |
-| 46 | AICreditsPanel reads REAL balance + live ledger (was hardcoded demo + SAMPLE_HISTORY). Top-up buttons deep-link to checkout (#28). Preview-props fallback retained. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
+| 46 | AICreditsPanel reads REAL balance + live ledger (was hardcoded demo + SAMPLE_HISTORY). Top-up buttons deep-link to checkout (#28). | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
+| 47 | Visibility boosts wired to wallet + platform revenue (4th stream). boostService: charge wallet (auto top-up via #11 if short), book income, time-boxed boost that auto-lapses. | `src/lib/revenue/boostService.ts`, `supabase/migrations/20260630_visibility_boosts.sql` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
@@ -27,4 +28,5 @@ pushed to `dev` (never direct to `main`).
 1. **Subscriptions** (#21/#28/#33) — recurring tiers, biggest for Department/Institutional.
 2. **AI credits** (#13/#44/#46) — near-pure margin (local Ollama); enforced on AI calls + live UI.
 3. **Marketplace commission** (#34) — % cut on every service order.
-All three roll up into platform earnings (#36) and show in the admin finance dashboard (#42).
+4. **Visibility boosts** (#47) — paid, time-boxed profile/bid/project/opportunity boosts.
+All roll up into platform earnings (#36) and show in the admin finance dashboard (#42).
