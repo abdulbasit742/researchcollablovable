@@ -30,9 +30,10 @@ pushed to `dev` (never direct to `main`).
 | 74 | Seed subscription_tiers. | `supabase/migrations/20260630_seed_subscription_tiers.sql` | on `dev` |
 | 76 | Financial tests for commission math. | `tests/financial/revenue.test.ts` | on `dev` |
 | 79 | AI Prompt Library on credited client. | `src/pages/AIPromptLibraryPage.tsx` | on `dev` |
-| 82 | Project-scope AI assist helper (credited deals.analyze-scope + heuristic fallback). | `src/lib/ai/scopeAssist.ts` | on `dev` |
-| 83 | personalAssistant chat + recs routed through credited ai-universal. | `src/lib/ai/personalAssistant.ts` | on `dev` |
-| 84 | AIProjectScopePage.generateResults() now awaits analyzeScopeWithAI() and blends real AI complexity/effort/risk into the estimate, falling back to the local heuristic. Closes #82's page wiring; the fake setTimeout estimate is now genuinely credited AI. | `src/pages/AIProjectScopePage.tsx` | on `dev` |
+| 82 | Project-scope AI assist helper. | `src/lib/ai/scopeAssist.ts` | on `dev` |
+| 83 | personalAssistant chat + recs on credited ai-universal. | `src/lib/ai/personalAssistant.ts` | on `dev` |
+| 84 | AIProjectScopePage blends credited AI estimate (closes #82 wiring). | `src/pages/AIProjectScopePage.tsx` | on `dev` |
+| 86 | useAIWorkflow routed through credited client; each AIFeature mapped to a (domain,action). Was hitting ai-workflow edge fn directly (no credits/Ollama). 4th credited-AI hook migration. | `src/hooks/useAIWorkflow.ts` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -47,16 +48,16 @@ pushed to `dev` (never direct to `main`).
 - CI runs tests/financial/ as a MUST-pass gate.
 
 ## Credited-AI migration (mechanical, ongoing)
-Done: AIPromptLibraryPage (#79), scope assist helper (#82) + page wiring (#84),
-personalAssistant chat+recs (#83 -> covers the personalAssistant API + #44 wrapper).
-Remaining: misc direct domain AI callers (audit during merge).
+Done: AIPromptLibraryPage (#79), scope assist + page (#82/#84), personalAssistant
+(#83), useAIWorkflow (#86). Remaining: audit any other direct supabase.functions
+AI calls during merge.
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
