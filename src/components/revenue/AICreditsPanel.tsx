@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Sparkles, Plus, AlertTriangle, Users, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getBalance, getLedger } from "@/lib/ai/aiCredits";
+import { CREDIT_PACKS, pricePerCredit } from "@/lib/ai/creditPacks";
 
 interface LedgerEntry { date: string; action: string; credits: number; }
 
@@ -80,8 +81,6 @@ export function AICreditsPanel(props: AICreditsPanelProps) {
     );
   }
 
-  // "total" reference for the usage bar: balance + spent gives a meaningful
-  // "of what you've had" denominator; fall back to purchased when available.
   const total = Math.max(purchased, balance + spent, 1);
   const remaining = balance;
   const pct = Math.min(100, Math.round(((total - remaining) / total) * 100));
@@ -126,16 +125,13 @@ export function AICreditsPanel(props: AICreditsPanelProps) {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: "500", credits: 500, price: "PKR 499" },
-            { label: "2,000", credits: 2000, price: "PKR 1,799" },
-            { label: "5,000", credits: 5000, price: "PKR 3,999" },
-          ].map((p) => (
-            <Button key={p.label} asChild variant="outline" className="h-auto flex-col py-2">
-              <Link to={`/checkout?credits=${p.credits}`}>
-                <span className="font-semibold">+{p.label}</span>
-                <span className="text-xs text-muted-foreground">{p.price}</span>
+        <div className="grid grid-cols-2 gap-2">
+          {CREDIT_PACKS.map((p) => (
+            <Button key={p.id} asChild variant="outline" className="h-auto flex-col py-2">
+              <Link to={`/checkout?credits=${p.id}`}>
+                <span className="font-semibold">+{p.credits.toLocaleString()}</span>
+                <span className="text-xs text-muted-foreground">{p.currency} {p.price.toLocaleString()}</span>
+                <span className="text-[10px] text-muted-foreground">{p.currency} {pricePerCredit(p).toFixed(2)}/credit</span>
               </Link>
             </Button>
           ))}
