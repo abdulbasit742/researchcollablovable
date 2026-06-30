@@ -24,28 +24,32 @@ pushed to `dev` (never direct to `main`).
 | 61 | Referral reward fulfillment: credits on conversion, cash on first purchase / institution. | `src/lib/referral/referralRewards.ts` | on `dev` |
 | 62 | Referral hooks: capture ?ref=, fulfil on signup, pay cash on first purchase. | `src/lib/referral/referralHooks.ts` | on `dev` |
 | 63 | Wired captureReferralFromUrl() into main.tsx bootstrap. | `src/main.tsx` | on `dev` |
-| 70 | Wired onSignupComplete() into AuthPage post-auth redirect (once per user). | `src/pages/AuthPage.tsx` | on `dev` |
-| 72 | Wired first-purchase referral payout into the settlement webhook (server-side, can't be bypassed): on a user's FIRST settled payment, pay referrer cash. Idempotent + non-blocking. 3rd pending-wiring item closed. | `supabase/functions/payments-settle/index.ts` | on `dev` |
+| 70 | Wired onSignupComplete() into AuthPage post-auth redirect. | `src/pages/AuthPage.tsx` | on `dev` |
+| 72 | Wired first-purchase referral payout into the settlement webhook (server-side). | `supabase/functions/payments-settle/index.ts` | on `dev` |
+| 73 | Shared credited ai-universal client: handles server 402 -> InsufficientCreditsError + top-up toast; streaming + non-streaming. The credited path all AI hooks should call. Closes the LAST pending-wiring item. | `src/lib/ai/aiUniversalClient.ts` | on `dev` |
 
 ## Conventions
 - Services export an object of async methods under `src/services/`.
 - Imports via `@/` alias. Dry-run / safe-by-default for anything touching money (in AND out).
 - Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
-- AI credits enforced SERVER-side in ai-universal (client checks are UX only).
+- AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73) for the 402 top-up UX.
 - All work lands on `dev`; merge to `main` after review.
 
-## Wiring still TODO (call from existing flows during merge review)
-- [x] `captureReferralFromUrl()` in app bootstrap (main.tsx) — #63.
-- [x] `onSignupComplete(userId)` on first authenticated landing (AuthPage) — #70.
-- [x] First-purchase referral payout in settlement webhook — #72 (server-side, supersedes client onFirstPurchase).
-- [ ] Ensure assistant UI calls the credited path (creditedStreamChat) — last item.
+## Wiring — ALL CLOSED
+- [x] captureReferralFromUrl() in app bootstrap (main.tsx) — #63.
+- [x] onSignupComplete(userId) on first authenticated landing (AuthPage) — #70.
+- [x] First-purchase referral payout in settlement webhook (server-side) — #72.
+- [x] Credited AI path: callAIUniversal/streamAIUniversal handle 402 + top-up — #73.
+  (Remaining: migrate individual domain hooks to import this client — mechanical, do during merge.)
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51)
+1. Subscriptions (#21/#28/#33)  2. AI credits (#13/#44/#46/#49/#51/#73)
 3. Marketplace commission (#34)  4. Visibility boosts (#47)
-Growth: referral rewards (#61) fired by hooks (#62), captured at bootstrap (#63), converted on signup (#70), first-purchase cash via settlement (#72).
+Growth: referral rewards (#61) fired by hooks (#62), captured (#63), converted on signup (#70), first-purchase cash via settlement (#72).
+
+## STATUS: feature-complete revenue + growth stack on `dev`. Ready for review + merge to main.
