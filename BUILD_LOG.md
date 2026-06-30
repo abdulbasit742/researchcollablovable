@@ -35,7 +35,8 @@ pushed to `dev` (never direct to `main`).
 | 84 | AIProjectScopePage blends credited AI estimate. | `src/pages/AIProjectScopePage.tsx` | on `dev` |
 | 86 | useAIWorkflow routed through credited client. | `src/hooks/useAIWorkflow.ts` | on `dev` |
 | 87 | Single source of truth for credit pack pricing (creditPacks.ts). | `src/lib/ai/creditPacks.ts`, `src/lib/ai/aiCredits.ts` | on `dev` |
-| 90 | checkoutService credit packs now derived from the canonical catalog (#87) instead of its own map (which lacked the 12000 pack). Checkout + panels + aiCredits now price identically. | `src/lib/revenue/checkoutService.ts` | on `dev` |
+| 90 | checkoutService credit packs derived from canonical catalog. | `src/lib/revenue/checkoutService.ts` | on `dev` |
+| 91 | AICreditsPanel renders packs from the canonical catalog (was hardcoded 3 packs, missing 12000). Last pricing-consistency follow-up closed: catalog -> aiCredits + checkout + panel all agree. | `src/components/revenue/AICreditsPanel.tsx` | on `dev` |
 
 ## PR
 - `dev` -> `main`: PR #1 (open, awaiting review). https://github.com/abdulbasit742/researchcollablovable/pull/1
@@ -46,19 +47,18 @@ pushed to `dev` (never direct to `main`).
 - Secret keys never in the browser bundle (delegated to Supabase Edge Functions).
 - AI routes through local Ollama first (cost ~0); Lovable gateway is fallback only.
 - AI credits enforced SERVER-side in ai-universal; UI calls callAIUniversal/streamAIUniversal (#73).
-- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90).
+- Credit pack pricing: import from src/lib/ai/creditPacks.ts ONLY (#87/#90/#91) — now consistent across aiCredits, checkout, and the panel.
 - All work lands on `dev`; merge to `main` after review.
 - CI runs tests/financial/ as a MUST-pass gate.
 
-## Credited-AI migration: done for Prompt Library (#79), scope (#82/#84), personalAssistant (#83), useAIWorkflow (#86).
-## Pricing consistency: aiCredits (#87) + checkoutService (#90) share creditPacks.ts. Follow-up: BillingPage/AICreditsPanel hardcoded arrays -> import catalog (mechanical).
+## Credited-AI migration: Prompt Library (#79), scope (#82/#84), personalAssistant (#83), useAIWorkflow (#86). Pricing consistency: COMPLETE (#87/#90/#91).
 
 ## Money flow complete (both directions, server-enforced)
 - **IN:**  payment hub (#11) -> gateway sessions + settlement (#22) -> wallet/credits/subscription.
 - **OUT:** earnings -> wallet -> payout request/approve (#53) -> disbursement edge fn (#55).
 
 ## Revenue streams live
-1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86/#87/#90)
+1. Subscriptions (#21/#28/#33/#74)  2. AI credits (#13/#44/#46/#49/#51/#73/#79/#82/#83/#84/#86/#87/#90/#91)
 3. Marketplace commission (#34/#76)  4. Visibility boosts (#47)
 Growth: referral rewards (#61/#62/#63/#70/#72).
 
