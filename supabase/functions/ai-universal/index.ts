@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { routeChatCompletion } from "../_shared/llmRouter.ts";
+import { costFor, creditsEnforced, checkBalance, debit, refund } from "../_shared/aiCreditGuard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -93,23 +95,33 @@ serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const userId = claimsData.claims.sub as string;
 
     const { domain, action, context, messages, stream } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const dom = domain || "general";
+    const act = action || "chat";
+    const systemPrompt = getSystemPrompt(dom, act);
 
-    const systemPrompt = getSystemPrompt(domain || "general", action || "chat");
+    // ── Credit enforcement (server-side, authoritative) ──
+    const cost = costFor(dom, act);
+    const enforce = creditsEnforced();
+    if (enforce) {
+      const bal = await checkBalance(userId, cost);
+      if (!bal.ok) {
+        return new Response(
+          JSON.stringify({ error: "Insufficient AI credits", needed: bal.needed, available: bal.available }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     // Build messages array
-    const aiMessages = [
+    const aiMessages: { role: string; content: string }[] = [
       { role: "system", content: systemPrompt },
     ];
-
-    // If messages are provided (chat mode), append them
     if (messages && Array.isArray(messages)) {
       aiMessages.push(...messages);
     } else {
-      // Single request mode: build a user message from context
       aiMessages.push({
         role: "user",
         content: typeof context === "string" ? context : JSON.stringify(context),
@@ -118,54 +130,52 @@ serve(async (req) => {
 
     const shouldStream = stream === true;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: aiMessages,
-        stream: shouldStream,
-      }),
-    });
+    // For streams we must debit up front (can't post-check a stream); refund if
+    // the upstream call errors before any output.
+    if (enforce && shouldStream) {
+      await debit(userId, cost, `${dom}.${act}`);
+    }
+
+    // Route through local Ollama first (cost ~0), Lovable as fallback (#49).
+    let routed;
+    try {
+      routed = await routeChatCompletion({ messages: aiMessages, stream: shouldStream });
+    } catch (e) {
+      if (enforce && shouldStream) await refund(userId, cost, `${dom}.${act}`);
+      throw e;
+    }
+    const { response, provider } = routed;
 
     if (!response.ok) {
+      if (enforce && shouldStream) await refund(userId, cost, `${dom}.${act}`);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits in Settings." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI provider error:", provider, response.status, errorText);
       return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (shouldStream) {
       return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-LLM-Provider": provider },
       });
     }
 
-    // Non-streaming: parse and return
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
 
-    // Try to parse as JSON if the prompt requested it
+    // Non-streaming: debit only on a successful, non-empty generation.
+    if (enforce && content) {
+      await debit(userId, cost, `${dom}.${act}`);
+    }
+
     let result;
     try {
-      // Strip markdown code fences if present
       const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       result = JSON.parse(cleaned);
     } catch {
@@ -173,7 +183,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-LLM-Provider": provider },
     });
   } catch (e) {
     console.error("ai-universal error:", e);

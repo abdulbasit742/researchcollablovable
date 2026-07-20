@@ -20,12 +20,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth, getRoleBasedRedirect } from "@/contexts/AuthContext";
 import { CelebrationOverlay } from "@/components/celebrations";
 import { useCelebration, CELEBRATION_PRESETS } from "@/hooks/useCelebration";
+import { onSignupComplete } from "@/lib/referral/referralHooks";
 
 const roles = [
   { value: "student", label: "Student", description: "Learn, collaborate, and earn" },
   { value: "researcher", label: "Researcher", description: "Lead projects and mentor" },
   { value: "professional", label: "Professional", description: "Post projects, hire talent, access tools" },
 ];
+
+// Ensures referral conversion fulfils at most once per browser even across
+// re-renders / remounts of this page.
+const REFERRAL_FIRED_KEY = "rc_referral_fired";
 
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
@@ -44,9 +49,20 @@ export default function AuthPage() {
   const [lastName, setLastName] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
   // Redirect if already authenticated
   useEffect(() => {
     if (!authLoading && user && userRole) {
+      // Fulfil any pending referral conversion exactly once for this user.
+      // Safe no-op when there's no stashed ?ref= code (#62/#70).
+      try {
+        if (localStorage.getItem(REFERRAL_FIRED_KEY) !== user.id) {
+          onSignupComplete(user.id)
+            .then(() => localStorage.setItem(REFERRAL_FIRED_KEY, user.id))
+            .catch(() => { /* non-blocking */ });
+        }
+      } catch { /* storage blocked -> skip */ }
+
       // Check if onboarding is completed
       if (!profile?.onboarding_completed) {
         navigate("/onboarding");
@@ -81,7 +97,7 @@ export default function AuthPage() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedRole) {
       toast({
         title: "Role required",
@@ -123,26 +139,25 @@ export default function AuthPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center p-4">
-      {/* Celebration overlay */}
-      <CelebrationOverlay 
-        isActive={isCelebrating} 
-        title={celebrationConfig.title}
-        subtitle={celebrationConfig.subtitle}
-        icon={celebrationConfig.icon}
-      />
+  const copy = (value: string, field: string) => {
+    navigator.clipboard?.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
+  };
 
-      {/* Background decorations */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute bottom-20 -left-20 h-60 w-60 rounded-full bg-primary/5 blur-2xl" />
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      <CelebrationOverlay isActive={isCelebrating} config={celebrationConfig} />
+
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/4 top-1/4 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl" />
       </div>
 
       <motion.div
@@ -151,288 +166,141 @@ export default function AuthPage() {
         transition={{ duration: 0.5 }}
         className="relative w-full max-w-md"
       >
-        {/* Logo */}
-        <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary">
-            <GraduationCap className="h-6 w-6 text-primary-foreground" />
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <GraduationCap className="h-6 w-6" />
           </div>
-          <span className="text-2xl font-bold">
-            <span className="text-primary">RCollab</span>
-          </span>
-        </Link>
+          <span className="text-2xl font-bold">RCollab</span>
+        </div>
 
-        <Card variant="elevated" className="border-0 shadow-xl">
-          <Tabs defaultValue={defaultTab} className="w-full">
-            <CardHeader className="pb-4">
+        <Card>
+          <CardHeader>
+            <Tabs defaultValue={defaultTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
-            </CardHeader>
 
-            <CardContent>
-              {/* Sign In Tab */}
-              <TabsContent value="signin" className="mt-0">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  {/* Sign in to your account */}
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signin-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        className="pl-10"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="signin-password">Password</Label>
-                      <Link
-                        to="/forgot-password"
-                        className="text-sm text-primary hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signin-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      <>
-                        Sign In
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              {/* Sign Up Tab */}
-              <TabsContent value="signup" className="mt-0">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+              <CardContent className="pt-6">
+                {/* Sign In Tab */}
+                <TabsContent value="signin">
+                  <form onSubmit={handleSignIn} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstname">First Name</Label>
-                      <Input
-                        id="firstname"
-                        placeholder="John"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        required
-                      />
+                      <Label htmlFor="signin-email">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input id="signin-email" type="email" placeholder="you@example.com" className="pl-10"
+                          value={email} onChange={(e) => setEmail(e.target.value)} required />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastname">Last Name</Label>
-                      <Input
-                        id="lastname"
-                        placeholder="Doe"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        required
-                      />
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="signin-password">Password</Label>
+                        <Link to="/forgot-password" className="text-sm text-primary hover:underline">Forgot password?</Link>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input id="signin-password" type={showPassword ? "text" : "password"} placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" className="pl-10 pr-10"
+                          value={password} onChange={(e) => setPassword(e.target.value)} required />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</> : <>Sign In<ArrowRight className="ml-2 h-4 w-4" /></>}
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                {/* Sign Up Tab */}
+                <TabsContent value="signup">
+                  <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="first-name">First Name</Label>
+                        <Input id="first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="last-name">Last Name</Label>
+                        <Input id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input id="signup-email" type="email" placeholder="you@example.com" className="pl-10"
+                          value={email} onChange={(e) => setEmail(e.target.value)} required />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input id="signup-password" type={showPassword ? "text" : "password"} placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" className="pl-10 pr-10"
+                          value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>I want to...</Label>
+                      <Select value={selectedRole} onValueChange={setSelectedRole}>
+                        <SelectTrigger><SelectValue placeholder="Select your role" /></SelectTrigger>
+                        <SelectContent>
+                          {roles.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                              <span className="font-medium">{role.label}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{role.description}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Checkbox id="terms" required />
+                      <Label htmlFor="terms" className="font-normal text-muted-foreground">
+                        I agree to the <Link to="/terms" className="text-primary hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+                      </Label>
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                      {isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating account...</> : <>Create Account<ArrowRight className="ml-2 h-4 w-4" /></>}
+                    </Button>
+
+                    <div className="rounded-lg border bg-muted/40 p-3 text-center text-sm">
+                      <span className="text-muted-foreground">Need help signing up?</span>
+                      <a href={supportConfig.whatsappUrl} target="_blank" rel="noreferrer" className="mt-1 flex items-center justify-center gap-2 text-primary hover:underline">
+                        <MessageCircle className="h-4 w-4" /> WhatsApp: +92 318 178 1454
+                      </a>
+                    </div>
+                  </form>
+                </TabsContent>
+
+                {/* Social Login */}
+                <div className="mt-6">
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        className="pl-10"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        className="pl-10 pr-10"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        minLength={8}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role">I want to...</Label>
-                    <Select value={selectedRole} onValueChange={setSelectedRole} required>
-                      <SelectTrigger id="role">
-                        <SelectValue placeholder="Select your role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((role) => (
-                          <SelectItem key={role.value} value={role.value}>
-                            <div>
-                              <div className="font-medium">{role.label}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {role.description}
-                              </div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="terms" required />
-                    <Label htmlFor="terms" className="text-sm font-normal">
-                      I agree to the{" "}
-                      <Link to="/terms" className="text-primary hover:underline">
-                        Terms of Service
-                      </Link>{" "}
-                      and{" "}
-                      <Link to="/privacy" className="text-primary hover:underline">
-                        Privacy Policy
-                      </Link>
-                    </Label>
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      <>
-                        Create Account
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-
-                  {/* WhatsApp Support Link */}
-                  <div className="mt-4 text-center">
-                    <p className="text-sm text-muted-foreground mb-2">Need help signing up?</p>
-                    <a
-                      href={`https://wa.me/${supportConfig.phoneNumber}?text=${encodeURIComponent("Assalam o Alaikum, I need help with sign-up.")}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      <span>WhatsApp: +92 318 178 1454</span>
-                    </a>
-                  </div>
-                </form>
-              </TabsContent>
-
-              {/* Social Login */}
-              <div className="mt-6">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">
-                      Or continue with
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <Button 
-                    variant="outline" 
-                    type="button"
-                    className="w-full"
-                    onClick={async () => {
-                      const { error } = await signInWithGoogle();
-                      if (error) {
-                        toast({
-                          title: "Google sign-in failed",
-                          description: error.message,
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
-                      <path
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        fill="#4285F4"
-                      />
-                      <path
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        fill="#34A853"
-                      />
-                      <path
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                        fill="#FBBC05"
-                      />
-                      <path
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        fill="#EA4335"
-                      />
-                    </svg>
+                  <Button type="button" variant="outline" className="mt-4 w-full" onClick={async () => {
+                    const { error } = await signInWithGoogle();
+                    if (error) {
+                      toast({ title: "Google sign-in failed", description: error.message, variant: "destructive" });
+                    }
+                  }}>
                     Continue with Google
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Tabs>
+              </CardContent>
+            </Tabs>
+          </CardHeader>
         </Card>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="mt-6 text-center text-xs text-muted-foreground">
           By signing in, you agree to our Terms of Service and Privacy Policy
         </p>
       </motion.div>

@@ -1,8 +1,15 @@
 /**
  * Personal AI Assistant — Service layer.
  * Additive system. Does NOT mutate core financial or trust engines.
+ *
+ * As of #83, chat + recommendations route through the CREDITED ai-universal
+ * client (#73) instead of the standalone pai-assistant edge function, so they
+ * inherit server-side credit enforcement (#51), the 402 top-up UX, and
+ * local-Ollama-first routing (#49). The public API below is unchanged, so
+ * existing callers and the #44 creditedAssistant wrapper keep working.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { callAIUniversal, streamAIUniversal } from "@/lib/ai/aiUniversalClient";
 
 // ─── Types ───
 export interface PAIMessage {
@@ -81,7 +88,6 @@ export async function saveMessage(conversationId: string, role: string, content:
     .single();
   if (error) throw error;
 
-  // Update conversation timestamp
   await (supabase as any)
     .from("pai_conversations")
     .update({ updated_at: new Date().toISOString() })
@@ -90,9 +96,7 @@ export async function saveMessage(conversationId: string, role: string, content:
   return data;
 }
 
-// ─── Streaming Chat ───
-
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pai-assistant`;
+// ─── Streaming Chat (credited via ai-universal) ───
 
 export async function streamChat({
   messages,
@@ -105,88 +109,27 @@ export async function streamChat({
   onDone: () => void;
   onError?: (err: Error) => void;
 }) {
-  try {
-    const resp = await fetch(CHAT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-      },
-      body: JSON.stringify({ messages }),
-    });
-
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}));
-      throw new Error(body.error || `Request failed: ${resp.status}`);
-    }
-
-    if (!resp.body) throw new Error("No response body");
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let textBuffer = "";
-    let streamDone = false;
-
-    while (!streamDone) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      textBuffer += decoder.decode(value, { stream: true });
-
-      let newlineIndex: number;
-      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-        let line = textBuffer.slice(0, newlineIndex);
-        textBuffer = textBuffer.slice(newlineIndex + 1);
-
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (line.startsWith(":") || line.trim() === "") continue;
-        if (!line.startsWith("data: ")) continue;
-
-        const jsonStr = line.slice(6).trim();
-        if (jsonStr === "[DONE]") { streamDone = true; break; }
-
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-          if (content) onDelta(content);
-        } catch {
-          textBuffer = line + "\n" + textBuffer;
-          break;
-        }
-      }
-    }
-
-    // Final flush
-    if (textBuffer.trim()) {
-      for (let raw of textBuffer.split("\n")) {
-        if (!raw) continue;
-        if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-        if (raw.startsWith(":") || raw.trim() === "") continue;
-        if (!raw.startsWith("data: ")) continue;
-        const jsonStr = raw.slice(6).trim();
-        if (jsonStr === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(jsonStr);
-          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-          if (content) onDelta(content);
-        } catch { /* ignore */ }
-      }
-    }
-
-    onDone();
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error("Unknown error");
-    onError?.(err);
-  }
+  // Routes through the credited client: server debits 1 credit (general.chat),
+  // returns 402 -> top-up toast when broke, and prefers local Ollama.
+  await streamAIUniversal({
+    domain: "general",
+    action: "chat",
+    messages,
+    onDelta,
+    onDone,
+    onError,
+  });
 }
 
-// ─── Recommendations ───
+// ─── Recommendations (credited) ───
 
 export async function generateRecommendations(userProfile: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke("pai-assistant", {
-    body: { action: "generate_recommendations", payload: userProfile },
+  const res = await callAIUniversal<{ recommendations?: PAIRecommendation[] }>({
+    domain: "career",
+    action: "coaching-advice",
+    context: userProfile,
   });
-  if (error) throw error;
-  return (data?.recommendations ?? []) as PAIRecommendation[];
+  return (res?.recommendations ?? []) as PAIRecommendation[];
 }
 
 // ─── Recommendations DB ───
